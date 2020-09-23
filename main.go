@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/shihanng/tfvar/cmd"
+	"github.com/petems/tfvar-to-tfevar/cmd"
 )
 
 var version = "dev"

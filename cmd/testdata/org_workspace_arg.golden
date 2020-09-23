@@ -1,0 +1,41 @@
+data "tfe_workspace" "cool_workspace" {
+  name         = "cool_workspace"
+  organization = "cool_org"
+}
+
+resource "tfe_variable" "availability_zone_names" {
+  key          = "availability_zone_names"
+  value        = <<EOT
+availability_zone_names = ["us-west-1a"]
+EOT
+  category     = "terraform"
+  hcl          = true
+  workspace_id = data.tfe_workspace.cool_workspace.id
+  description  = ""
+}
+
+resource "tfe_variable" "docker_ports" {
+  key          = "docker_ports"
+  value        = <<EOT
+docker_ports = [{
+  external = 8300
+  internal = 8300
+  protocol = "tcp"
+}]
+EOT
+  category     = "terraform"
+  hcl          = true
+  workspace_id = data.tfe_workspace.cool_workspace.id
+  description  = ""
+}
+
+resource "tfe_variable" "image_id" {
+  key          = "image_id"
+  value        = <<EOT
+image_id = null
+EOT
+  category     = "terraform"
+  hcl          = true
+  workspace_id = data.tfe_workspace.cool_workspace.id
+  description  = ""
+}

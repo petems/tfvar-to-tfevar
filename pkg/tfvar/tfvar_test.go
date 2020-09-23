@@ -96,3 +96,68 @@ region        = null
 `
 	assert.Equal(t, expected, buf.String())
 }
+
+func TestWriteAsTerraformCode(t *testing.T) {
+	vars, err := Load("testdata/singular")
+	require.NoError(t, err)
+
+	sort.Slice(vars, func(i, j int) bool { return vars[i].Name < vars[j].Name })
+
+	var buf bytes.Buffer
+	assert.NoError(t, WriteAsTerraformCode(&buf, vars, "example_organization", "example_workspace"))
+	expected := `data "tfe_workspace" "example_workspace" {
+  name         = "example_workspace"
+  organization = "example_organization"
+}
+
+resource "tfe_variable" "availability_zone_names" {
+  key          = "availability_zone_names"
+  value        = <<EOT
+availability_zone_names = ["us-west-1a"]
+EOT
+  category     = "terraform"
+  hcl          = true
+  workspace_id = data.tfe_workspace.example_workspace.id
+  description  = ""
+}
+
+resource "tfe_variable" "aws_amis" {
+  key          = "aws_amis"
+  value        = <<EOT
+aws_amis = {
+  eu-west-1 = "ami-b1cf19c6"
+  us-east-1 = "ami-de7ab6b6"
+  us-west-1 = "ami-3f75767a"
+  us-west-2 = "ami-21f78e11"
+}
+EOT
+  category     = "terraform"
+  hcl          = true
+  workspace_id = data.tfe_workspace.example_workspace.id
+  description  = ""
+}
+
+resource "tfe_variable" "docker_ports" {
+  key          = "docker_ports"
+  value        = <<EOT
+docker_ports = [{
+  external = 8300
+  internal = 8301
+  protocol = "tcp"
+}]
+EOT
+  category     = "terraform"
+  hcl          = true
+  workspace_id = data.tfe_workspace.example_workspace.id
+  description  = ""
+}
+
+resource "tfe_variable" "instance_name" {
+  key          = "instance_name"
+  value        = "my-instance"
+  category     = "terraform"
+  workspace_id = data.tfe_workspace.example_workspace.id
+  description  = ""
+}`
+	assert.Equal(t, expected, buf.String())
+}

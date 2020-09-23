@@ -32,14 +32,14 @@ brews:
       name: "Shi Han NG"
       email: shihanng@gmail.com
     description: "Terraform's variable definitions template generator."
-    homepage: "https://github.com/shihanng/tfvar"
+    homepage: "https://github.com/petems/tfvar-to-tfevar"
     install: |
       bin.install Dir['tfvar']
     test: |
       system "#{bin}/tfvar"
 
 nfpms:
-  - homepage: https://github.com/shihanng/tfvar
+  - homepage: https://github.com/petems/tfvar-to-tfevar
     maintainer: Shi Han NG <shihanng@gmail.com>
     file_name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
     description: "Terraform's variable definitions template generator."

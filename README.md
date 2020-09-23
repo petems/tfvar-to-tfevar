@@ -1,14 +1,8 @@
-# `tfvar`
+# `tfvar-to-tfevar`
 
-[![](https://github.com/shihanng/tfvar/workflows/main/badge.svg?branch=master)](https://github.com/shihanng/tfvar/actions?query=workflow%3Amain)
-[![](https://github.com/shihanng/tfvar/workflows/release/badge.svg?branch=master)](https://github.com/shihanng/tfvar/actions?query=workflow%3Arelease)
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/shihanng/tfvar)](https://github.com/shihanng/tfvar/releases)
-[![Coverage Status](https://coveralls.io/repos/github/shihanng/tfvar/badge.svg?branch=master)](https://coveralls.io/github/shihanng/tfvar?branch=master)
-[![Go Report Card](https://goreportcard.com/badge/github.com/shihanng/tfvar)](https://goreportcard.com/report/github.com/shihanng/tfvar)
-[![Package Documentation](https://godoc.org/github.com/shihanng/tfvar/pkg/tfvar?status.svg)](http://godoc.org/github.com/shihanng/tfvar/pkg/tfvar)
-[![GitHub license](https://img.shields.io/github/license/shihanng/tfvar)](https://github.com/shihanng/tfvar/blob/master/LICENSE)
+**tfvar-to-tfevar** is a way to export [Terraform](https://www.terraform.io/)'s [variable definitions](https://www.terraform.io/docs/configuration/variables.html#assigning-values-to-root-module-variables) to [Terraform Enteprise or Terraform Cloud variables](https://www.terraform.io/docs/cloud/workspaces/variables.html)
 
-**tfvar** is a [Terraform](https://www.terraform.io/)'s [variable definitions](https://www.terraform.io/docs/configuration/variables.html#assigning-values-to-root-module-variables) template generator.
+It is heavily based on the awesome original work in [tfvar](https://github.com/shihanng/tfvar)
 
 For Terraform configuration that has input variables declared, e.g.,
 
@@ -38,100 +32,102 @@ variable "docker_ports" {
 }
 ```
 
-- **tfvar** will search for all input variables and generate template that helps user populates those variables easily:
-    ```
-    $ tfvar .
-    availability_zone_names = ["us-west-1a"]
-    docker_ports            = [{ external = 8300, internal = 8300, protocol = "tcp" }]
-    image_id                = null
-    ```
-- Note that default values are assigned to the definitions by default as shown above. Use the `--ignore-default` options to ignore the default values.
-    ```
-    $ tfvar . --ignore-default
-    availability_zone_names = null
-    docker_ports            = null
-    image_id                = null
-    ```
-- **tfvar** also provides output in environment variable formats:
-    ```
-    $ tfvar . -e
-    export TF_VAR_availability_zone_names='["us-west-1a"]'
-    export TF_VAR_docker_ports='[{ external = 8300, internal = 8300, protocol = "tcp" }]'
-    export TF_VAR_image_id=''
-    ```
-- There is also `--auto-assign` option for those who wants the values from `terraform.tfvars[.json]`, `*.auto.tfvars[.json]`, and environment variables (`TF_VAR_` followed by the name of a declared variable) to be assigned to the generated definitions automatically.
-    ```
-    $ export TF_VAR_availability_zone_names='["custom_zone"]'
-    $ tfvar . --auto-assign
-    availability_zone_names = ["custom_zone"]
-    docker_ports            = [{ external = 8300, internal = 8300, protocol = "tcp" }]
-    image_id                = null
-    ```
-- Like the [`terraform (plan|apply)`](https://www.terraform.io/docs/configuration/variables.html#variables-on-the-command-line) CLI tool, individual vairables can also be specified via `--var` option.
-    ```
-    $ tfvar . --var=availability_zone_names='["custom_zone"]' --var=image_id=abc123
-    availability_zone_names = ["custom_zone"]
-    docker_ports            = [{ external = 8300, internal = 8300, protocol = "tcp" }]
-    image_id                = "abc123"
-    ```
-- Variables in file can also be specified via `--var-file` option.
-    ```
-    $ cat my.tfvars
-    image_id = "xyz"
-    $ tfvar . --var-file my.tfvars
-    availability_zone_names = ["us-west-1a"]
-    docker_ports            = [{ external = 8300, internal = 8300, protocol = "tcp" }]
-    image_id                = "xyz"
-    ```
-
-For more info, checkout the `--help` page:
+It will create valid Terraform code for the TFE Provider as individual `tfe_variable` resources.
 
 ```
-$ tfvar --help
-Generate variable definitions template for Terraform module as
-one would write it in variable definitions files (.tfvars).
+$ tfvar-to-tfevar .
+resource "tfe_variable" "availability_zone_names" {
+  key          = "availability_zone_names"
+  value        = <<EOT
+availability_zone_names = ["us-west-1a"]
+EOT
+  category     = "terraform"
+  hcl          = true
+  workspace_id = data.tfe_workspace.example_workspace.id
+  description  = ""
+}
 
-Usage:
-  tfvar [DIR] [flags]
+resource "tfe_variable" "docker_ports" {
+  key          = "docker_ports"
+  value        = <<EOT
+docker_ports = [{
+  external = 8300
+  internal = 8300
+  protocol = "tcp"
+}]
+EOT
+  category     = "terraform"
+  hcl          = true
+  workspace_id = data.tfe_workspace.example_workspace.id
+  description  = ""
+}
 
-Flags:
-  -a, --auto-assign      Use values from environment variables TF_VAR_* and
-                         variable definitions files e.g. terraform.tfvars[.json] *.auto.tfvars[.json]
-  -d, --debug            Print debug log on stderr
-  -e, --env-var          Print output in export TF_VAR_image_id=ami-abc123 format
-  -h, --help             help for tfvar
-      --ignore-default   Do not use defined default values
-      --version          version for tfvar
+resource "tfe_variable" "image_id" {
+  key          = "image_id"
+  value        = <<EOT
+image_id = null
+EOT
+  category     = "terraform"
+  hcl          = true
+  workspace_id = data.tfe_workspace.example_workspace.id
+  description  = ""
+}
 ```
 
+If you then add a valid `tfvars` file, it'll read that as well and set values for the inputs:
+
+```
+$ tfvar-to-tfevar . --var-file='test.tfvars'
+resource "tfe_variable" "availability_zone_names" {
+  key          = "availability_zone_names"
+  value        = <<EOT
+availability_zone_names = ["us-west-1a"]
+EOT
+  category     = "terraform"
+  hcl          = true
+  workspace_id = data.tfe_workspace.example_workspace.id
+  description  = ""
+}
+
+resource "tfe_variable" "docker_ports" {
+  key          = "docker_ports"
+  value        = <<EOT
+docker_ports = [{
+  external = 8300
+  internal = 8300
+  protocol = "tcp"
+}]
+EOT
+  category     = "terraform"
+  hcl          = true
+  workspace_id = data.tfe_workspace.example_workspace.id
+  description  = ""
+}
+
+resource "tfe_variable" "image_id" {
+  key          = "image_id"
+  value        = "xyz"
+  category     = "terraform"
+  workspace_id = data.tfe_workspace.example_workspace.id
+  description  = ""
+
+```
 
 ## Installation
 
 ### [Homebrew (macOS)](https://github.com/shihanng/homebrew-tfvar)
 
-```
-brew install shihanng/tfvar/tfvar
-```
+**WIP**
 
 ### Debian, Ubuntu
 
-```
-curl -sLO https://github.com/shihanng/tfvar/releases/latest/download/tfvar_linux_amd64.deb
-dpkg -i tfvar_linux_amd64.deb
-```
-
-### RedHat, CentOS
-
-```
-rpm -ivh https://github.com/shihanng/tfvar/releases/latest/download/tfvar_linux_amd64.rpm
-```
 
 ### Binaries
 
-The [release page](https://github.com/shihanng/tfvar/releases) contains binaries built for various platforms. Download the version matches your environment (e.g. `linux_amd64`) and place the binary in the executable `$PATH` e.g. `/usr/local/bin`:
+The [release page](https://github.com/petems/tfvar-to-tfevar/releases) contains binaries built for various platforms. Download the version matches your environment (e.g. `linux_amd64`) and place the binary in the executable `$PATH` e.g. `/usr/local/bin`:
 
 ```
-curl -sL https://github.com/shihanng/tfvar/releases/latest/download/tfvar_linux_amd64.tar.gz | \
+curl -sL https://github.com/petems/tfvar-to-tfevar/releases/latest/download/tfvar_linux_amd64.tar.gz | \
     tar xz -C /usr/local/bin/ tfvar
 ```
 
@@ -140,13 +136,13 @@ curl -sL https://github.com/shihanng/tfvar/releases/latest/download/tfvar_linux_
 With [Go](https://golang.org/doc/install) already installed in your system, use `go get`
 
 ```
-go get github.com/shihanng/tfvar
+go get github.com/petems/tfvar-to-tfevar
 ```
 
 or clone this repo and `make install`
 
 ```
-git clone https://github.com/shihanng/tfvar.git
+git clone https://github.com/petems/tfvar-to-tfevar.git
 cd tfvar
 make install
 ```

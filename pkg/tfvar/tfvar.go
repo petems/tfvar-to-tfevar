@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/cockroachdb/errors"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
@@ -109,6 +110,69 @@ func WriteAsTFVars(w io.Writer, vars []Variable) error {
 
 	_, err := f.WriteTo(w)
 	return errors.Wrap(err, "tfvar: failed to write as tfvars")
+}
+
+// WriteAsTerraformCode outputs the given vars as Terraform code for the TFE provider
+func WriteAsTerraformCode(w io.Writer, vars []Variable, org string, workspace string) error {
+
+	var tfCodeArray = make([]string, len(vars))
+
+	tfWorkspaceDataBlock := `data "tfe_workspace" "%[1]s" {
+  name         = "%[1]s"
+  organization = "%[2]s"
+}
+
+`
+
+	workspaceString := fmt.Sprintf(tfWorkspaceDataBlock, workspace, org)
+
+	_, err := io.WriteString(w, workspaceString)
+
+	if err != nil {
+		return errors.Wrap(err, "tfvar-to-tfevar: failed to write as tf code")
+	}
+
+	tfCodeTemplateSimple := `
+resource "tfe_variable" "%[1]s" {
+  key          = "%[1]s"
+  value        = "%[2]s"
+  category     = "terraform"
+  workspace_id = data.tfe_workspace.%[3]s.id
+  description  = ""
+}`
+
+	tfCodeTemplateHcl := `
+resource "tfe_variable" "%[1]s" {
+  key          = "%[1]s"
+  value        = <<EOT
+%[2]s
+EOT
+  category     = "terraform"
+  hcl          = true
+  workspace_id = data.tfe_workspace.%[3]s.id
+  description  = ""
+}`
+
+	for _, v := range vars {
+		if v.Value.Type().IsPrimitiveType() {
+			tfCodeArray = append(tfCodeArray, fmt.Sprintf(tfCodeTemplateSimple, v.Name, v.Value.AsString(), workspace))
+		} else {
+			f := hclwrite.NewEmptyFile()
+			rootBody := f.Body()
+			rootBody.SetAttributeValue(v.Name, v.Value)
+			hclString := strings.TrimSpace(string(f.Bytes()))
+
+			tfCodeArray = append(tfCodeArray, fmt.Sprintf(tfCodeTemplateHcl, v.Name, hclString, workspace))
+		}
+	}
+
+	tfCodeString := strings.Join(tfCodeArray[:], "\n")
+
+	tfCodeString = strings.TrimLeft(tfCodeString, "\n")
+
+	_, err = io.WriteString(w, tfCodeString)
+
+	return errors.Wrap(err, "tfvar-to-tfevar: failed to write as tf code")
 }
 
 func convertNull(v cty.Value) cty.Value {

@@ -1,0 +1,37 @@
+data "tfe_workspace" "example_workspace" {
+  name         = "example_workspace"
+  organization = "example_organization"
+}
+
+resource "tfe_variable" "availability_zone_names" {
+  key          = "availability_zone_names"
+  value        = <<EOT
+availability_zone_names = null
+EOT
+  category     = "terraform"
+  hcl          = true
+  workspace_id = data.tfe_workspace.example_workspace.id
+  description  = ""
+}
+
+resource "tfe_variable" "docker_ports" {
+  key          = "docker_ports"
+  value        = <<EOT
+docker_ports = null
+EOT
+  category     = "terraform"
+  hcl          = true
+  workspace_id = data.tfe_workspace.example_workspace.id
+  description  = ""
+}
+
+resource "tfe_variable" "image_id" {
+  key          = "image_id"
+  value        = <<EOT
+image_id = null
+EOT
+  category     = "terraform"
+  hcl          = true
+  workspace_id = data.tfe_workspace.example_workspace.id
+  description  = ""
+}

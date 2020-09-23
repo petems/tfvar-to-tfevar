@@ -5,7 +5,7 @@ import (
 	"sort"
 
 	"github.com/cockroachdb/errors"
-	"github.com/shihanng/tfvar/pkg/tfvar"
+	"github.com/petems/tfvar-to-tfevar/pkg/tfvar"
 	"github.com/spf13/cobra"
 	"github.com/zclconf/go-cty/cty"
 	"go.uber.org/zap"
@@ -14,10 +14,11 @@ import (
 const (
 	flagAutoAssign = "auto-assign"
 	flagDebug      = "debug"
-	flagEnvVar     = "env-var"
 	flagNoDefault  = "ignore-default"
 	flagVar        = "var"
 	flagVarFile    = "var-file"
+	flagOrg        = "org"
+	flagWorkspace  = "workspace"
 )
 
 // New returns a new instance of cobra.Command for tfvar. Usage:
@@ -32,10 +33,9 @@ func New(out io.Writer, version string) (*cobra.Command, func()) {
 	}
 
 	rootCmd := &cobra.Command{
-		Use:   "tfvar [DIR]",
-		Short: "A CLI tool that helps generate template for Terraform's variable definitions",
-		Long: `Generate variable definitions template for Terraform module as
-one would write it in variable definitions files (.tfvars).
+		Use:   "tfvar-to-tfevar [DIR]",
+		Short: "A CLI tool that helps export Terraform's variable definitions to Terraform Enterprise/Cloud Variables",
+		Long: `Export variable definitions from variable definitions files (.tfvars) to Terraform Enterprise/Cloud.
 `,
 		PreRunE: r.preRootRunE,
 		RunE:    r.rootRunE,
@@ -48,11 +48,12 @@ one would write it in variable definitions files (.tfvars).
 	rootCmd.PersistentFlags().BoolP(flagAutoAssign, "a", false, `Use values from environment variables TF_VAR_* and
 variable definitions files e.g. terraform.tfvars[.json] *.auto.tfvars[.json]`)
 	rootCmd.PersistentFlags().BoolP(flagDebug, "d", false, "Print debug log on stderr")
-	rootCmd.PersistentFlags().BoolP(flagEnvVar, "e", false, "Print output in export TF_VAR_image_id=ami-abc123 format")
 	rootCmd.PersistentFlags().Bool(flagNoDefault, false, "Do not use defined default values")
 	rootCmd.PersistentFlags().StringArray(flagVar, []string{}, `Set a variable in the generated definitions.
 This flag can be set multiple times.`)
 	rootCmd.PersistentFlags().String(flagVarFile, "", `Set variables from a file.`)
+	rootCmd.PersistentFlags().String(flagOrg, "example_organization", `Set the organisation for the generated terraform code.`)
+	rootCmd.PersistentFlags().String(flagWorkspace, "example_workspace", `Set the workspace for the generated terraform code..`)
 
 	return rootCmd, func() {
 		if r.log != nil {
@@ -105,16 +106,21 @@ func (r *runner) rootRunE(cmd *cobra.Command, args []string) error {
 		return errors.Wrap(err, "cmd: get flag --ignore-default")
 	}
 
+	org, err := cmd.PersistentFlags().GetString(flagOrg)
+	if err != nil {
+		return errors.Wrap(err, "cmd: get flag --org")
+	}
+
+	workspace, err := cmd.PersistentFlags().GetString(flagWorkspace)
+	if err != nil {
+		return errors.Wrap(err, "cmd: get flag --workspace")
+	}
+
 	if ignoreDefault {
 		r.log.Debug("Replacing values with null")
 		for i, v := range vars {
 			vars[i].Value = cty.NullVal(v.Value.Type())
 		}
-	}
-
-	isEnvVar, err := cmd.PersistentFlags().GetBool(flagEnvVar)
-	if err != nil {
-		return errors.Wrap(err, "cmd: get flag --env-var")
 	}
 
 	isAutoAssign, err := cmd.PersistentFlags().GetBool(flagAutoAssign)
@@ -164,12 +170,7 @@ func (r *runner) rootRunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	writer := tfvar.WriteAsTFVars
+	writer := tfvar.WriteAsTerraformCode
 
-	if isEnvVar {
-		r.log.Debug("Print outputs in environment variables format")
-		writer = tfvar.WriteAsEnvVars
-	}
-
-	return writer(r.out, vars)
+	return writer(r.out, vars, org, workspace)
 }
